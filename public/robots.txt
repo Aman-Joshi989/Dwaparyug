@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://www.dwaparyug.org
+
+# Sitemaps
+Sitemap: https://www.dwaparyug.org/sitemap.xml
