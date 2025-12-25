@@ -471,6 +471,33 @@ export default function ProductPersonalizationModal({
                 onChange={(e) => updateFormData({ instaId: e.target.value })}
               />
             </div>
+            
+            <div>
+              <Label htmlFor="customMessage">Message to be printed *</Label>
+
+              <Textarea
+                id="customMessage"
+                placeholder="Add message that will print..."
+                value={formData.customMessage}
+                onChange={handleInputChange}
+                rows={2}
+              />
+
+              {errors.customMessage && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.customMessage}
+                </p>
+              )}
+              <p
+                className={`text-sm ${remainingWords < 5 ? "text-red-500" : "text-muted-foreground"
+                  }`}
+              >
+                {remainingWords >= 0
+                  ? `${remainingWords} word${remainingWords !== 1 ? "s" : ""} remaining`
+                  : "Word limit reached"}
+              </p>
+            </div>
+
 
             <div>
               <Label htmlFor="videoWishes">Wishing Videos</Label>
@@ -532,32 +559,7 @@ export default function ProductPersonalizationModal({
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="customMessage">Message to be printed *</Label>
-
-              <Textarea
-                id="customMessage"
-                placeholder="Add message that will print..."
-                value={formData.customMessage}
-                onChange={handleInputChange}
-                rows={2}
-              />
-
-              {errors.customMessage && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.customMessage}
-                </p>
-              )}
-              <p
-                className={`text-sm ${remainingWords < 5 ? "text-red-500" : "text-muted-foreground"
-                  }`}
-              >
-                {remainingWords >= 0
-                  ? `${remainingWords} word${remainingWords !== 1 ? "s" : ""} remaining`
-                  : "Word limit reached"}
-              </p>
-            </div>
-
+            
             <div className="flex items-center space-x-2 pb-4">
               <Checkbox
                 id="isAnonymous"
