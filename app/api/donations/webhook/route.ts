@@ -1,4 +1,3 @@
-// app/api/donations/webhook/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { SelectQuery } from '@/lib/database'
@@ -7,12 +6,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text()
     const signature = request.headers.get('x-razorpay-signature')
-    
+
     if (!signature) {
-      return NextResponse.json(
-        { error: 'Missing signature' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
     }
 
     // Verify webhook signature
@@ -22,28 +18,24 @@ export async function POST(request: NextRequest) {
       .digest('hex')
 
     if (signature !== expectedSignature) {
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
     }
 
     const event = JSON.parse(body)
-    
-    // Handle different event types
+
     switch (event.event) {
-      case 'payment.failed':
-        await handlePaymentFailed(event.payload.payment.entity)
-        break
-        
       case 'payment.captured':
-        await handlePaymentCaptured(event.payload.payment.entity)
+        await upsertPayment(event.payload.payment.entity)
         break
-        
+
+      case 'payment.failed':
+        await upsertFailedPayment(event.payload.payment.entity)
+        break
+
       case 'order.paid':
-        await handleOrderPaid(event.payload.order.entity)
+        await upsertOrderPaid(event.payload.order.entity)
         break
-        
+
       default:
         console.log('Unhandled webhook event:', event.event)
     }
@@ -52,116 +44,120 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Webhook processing error:', error)
-    
     return NextResponse.json(
-      { 
-        error: 'Webhook processing failed', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        error: 'Webhook processing failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )
   }
 }
 
-async function handlePaymentFailed(payment: any) {
-  try {
-    // Update payment request status to failed
-    const updateQuery = `
-      UPDATE donation_payment_requests 
-      SET status = 'failed', 
-          payment_response = $1,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE razorpay_order_id = $2
-    `
-    
-    await SelectQuery(updateQuery, [
-      JSON.stringify({
-        razorpay_payment_id: payment.id,
-        failure_reason: payment.error_reason,
-        error_code: payment.error_code,
-        error_description: payment.error_description,
-        failed_at: new Date().toISOString()
-      }),
-      payment.order_id
-    ])
+/** Handle captured payments */
+async function upsertPayment(payment: any) {
+  const query = `
+    INSERT INTO donation_payment_requests (
+      razorpay_order_id,
+      razorpay_payment_id,
+      status,
+      payment_response,
+      created_at,
+      updated_at
+    ) VALUES ($1, $2, 'paid', $3::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (razorpay_order_id) DO UPDATE SET
+      status = 'paid',
+      razorpay_payment_id = EXCLUDED.razorpay_payment_id,
+      payment_response = donation_payment_requests.payment_response || EXCLUDED.payment_response,
+      updated_at = CURRENT_TIMESTAMP
+  `
 
-    console.log('Payment failed updated for order:', payment.order_id)
-    
-  } catch (error) {
-    console.error('Error handling payment failed:', error)
-  }
+  await SelectQuery(query, [
+    payment.order_id,
+    payment.id,
+    JSON.stringify({
+      amount: payment.amount,
+      method: payment.method,
+      email: payment.email,
+      contact: payment.contact,
+      captured_at: new Date().toISOString(),
+      source: 'razorpay_webhook'
+    })
+  ])
+
+  // console.log('Payment stored/updated:', payment.id)
 }
 
-async function handlePaymentCaptured(payment: any) {
-  try {
-    // Update payment request status to paid if not already processed
-    const updateQuery = `
-      UPDATE donation_payment_requests 
-      SET status = 'paid',
-          payment_response = COALESCE(payment_response, '{}') || $1::jsonb,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE razorpay_order_id = $2 AND status != 'paid'
-    `
-    
-    await SelectQuery(updateQuery, [
-      JSON.stringify({
-        captured_at: new Date().toISOString(),
-        capture_method: 'webhook'
-      }),
-      payment.order_id
-    ])
+/** Handle failed payments */
+async function upsertFailedPayment(payment: any) {
+  const query = `
+    INSERT INTO donation_payment_requests (
+      razorpay_order_id,
+      razorpay_payment_id,
+      status,
+      payment_response,
+      created_at,
+      updated_at
+    ) VALUES ($1, $2, 'failed', $3::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (razorpay_order_id) DO UPDATE SET
+      status = 'failed',
+      razorpay_payment_id = EXCLUDED.razorpay_payment_id,
+      payment_response = donation_payment_requests.payment_response || EXCLUDED.payment_response,
+      updated_at = CURRENT_TIMESTAMP
+  `
 
-    console.log('Payment captured updated for order:', payment.order_id)
-    
-  } catch (error) {
-    console.error('Error handling payment captured:', error)
-  }
+  await SelectQuery(query, [
+    payment.order_id,
+    payment.id,
+    JSON.stringify({
+      error_code: payment.error_code,
+      error_description: payment.error_description,
+      failed_at: new Date().toISOString()
+    })
+  ])
+
+  // console.log('Payment failed updated:', payment.id)
 }
 
-async function handleOrderPaid(order: any) {
-  try {
-    // Update payment request status to paid
-    const updateQuery = `
-      UPDATE donation_payment_requests 
-      SET status = 'paid',
-          payment_response = COALESCE(payment_response, '{}') || $1::jsonb,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE razorpay_order_id = $2
-    `
-    
-    await SelectQuery(updateQuery, [
-      JSON.stringify({
-        order_paid_at: new Date().toISOString(),
-        webhook_processed: true
-      }),
-      order.id
-    ])
+/** Handle order paid events */
+async function upsertOrderPaid(order: any) {
+  const query = `
+    INSERT INTO donation_payment_requests (
+      razorpay_order_id,
+      status,
+      payment_response,
+      created_at,
+      updated_at
+    ) VALUES ($1, 'paid', $2::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (razorpay_order_id) DO UPDATE SET
+      status = 'paid',
+      payment_response = donation_payment_requests.payment_response || EXCLUDED.payment_response,
+      updated_at = CURRENT_TIMESTAMP
+  `
 
-    console.log('Order paid updated for order:', order.id)
-    
-  } catch (error) {
-    console.error('Error handling order paid:', error)
-  }
+  await SelectQuery(query, [
+    order.id,
+    JSON.stringify({
+      order_paid_at: new Date().toISOString(),
+      webhook_processed: true
+    })
+  ])
+
+  // console.log('Order paid updated/inserted:', order.id)
 }
 
-// API to manually update payment status (for testing or recovery)
+/** PATCH API to manually update payment status */
 export async function PATCH(request: NextRequest) {
   try {
     const { orderId, status, paymentId } = await request.json()
-    
+
     if (!orderId || !status) {
-      return NextResponse.json(
-        { error: 'Order ID and status are required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Order ID and status are required' }, { status: 400 })
     }
 
     const validStatuses = ['created', 'attempted', 'paid', 'failed', 'cancelled']
     if (!validStatuses.includes(status)) {
-      return NextResponse.json(
-        { error: 'Invalid status' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
     const updateQuery = `
@@ -172,17 +168,15 @@ export async function PATCH(request: NextRequest) {
       WHERE razorpay_order_id = $3
       RETURNING *
     `
-    
-    const updateData:any = {
+
+    const updateData: any = {
       manual_update: true,
       updated_by: 'admin',
       updated_at: new Date().toISOString()
     }
-    
-    if (paymentId) {
-      updateData.razorpay_payment_id = paymentId
-    }
-    
+
+    if (paymentId) updateData.razorpay_payment_id = paymentId
+
     const result = await SelectQuery(updateQuery, [
       status,
       JSON.stringify(updateData),
@@ -190,10 +184,7 @@ export async function PATCH(request: NextRequest) {
     ])
 
     if (result.length === 0) {
-      return NextResponse.json(
-        { error: 'Payment request not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Payment request not found' }, { status: 404 })
     }
 
     return NextResponse.json({
@@ -204,11 +195,10 @@ export async function PATCH(request: NextRequest) {
 
   } catch (error) {
     console.error('Error updating payment status:', error)
-    
     return NextResponse.json(
-      { 
-        error: 'Failed to update payment status', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        error: 'Failed to update payment status',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )
