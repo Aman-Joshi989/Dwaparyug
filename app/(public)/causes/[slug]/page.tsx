@@ -857,7 +857,7 @@ Powered by Your Platform Name - Making giving meaningful and transparent.`
                                     </div>
 
                                     {/* Product Impact Description */}
-                                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-3 rounded-lg mb-3 sm:mb-4">
+                                    {/* <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-3 rounded-lg mb-3 sm:mb-4">
                                       <div className="text-xs font-semibold text-gray-700 flex items-center sm:text-sm">
                                         <TrendingUp className="w-3 h-3 mr-2 text-blue-600 sm:w-4 sm:h-4" />
                                         Impact: {
@@ -869,7 +869,7 @@ Powered by Your Platform Name - Making giving meaningful and transparent.`
                                                     'Essential supplies for families in need'
                                         }
                                       </div>
-                                    </div>
+                                    </div> */}
 
                                     {getItemQuantity(product.id, campaign.id) > 0 ? (
                                       <div className="flex items-center justify-between bg-gray-100 p-2 rounded-lg mb-3 sm:p-3 sm:mb-4">
