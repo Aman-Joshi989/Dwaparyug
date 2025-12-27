@@ -616,7 +616,7 @@ export default function CartPage() {
                   )}
 
                   {/* Impact Preview */}
-                  {totalDonationAmount > 0 && (
+                  {/* {totalDonationAmount > 0 && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 space-y-2">
                       <div className="flex items-center">
                         <Users className="w-4 h-4 text-blue-500 mr-2 flex-shrink-0" />
@@ -629,10 +629,10 @@ export default function CartPage() {
                         <span className="font-semibold">
                           {Math.floor(totalDonationAmount / 100)} people
                         </span>{' '}
-                        in need
+                        in need     
                       </p>
                     </div>
-                  )}
+                  )} */}
 
                   {/* Proceed Button */}
                   <Button
